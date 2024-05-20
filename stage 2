@@ -1,0 +1,68 @@
+Add-On Features (Advanced)
+Pagination and Form Validation
+
+Add pagination for the property listings.
+Implement form validation on both client and server sides.
+Mandatory Login for Buyers
+
+Require buyers to log in to view seller details.
+Redirect unauthorized users attempting to access seller information to the login screen.
+Like Button and Email Notifications
+
+Implement a "Like" button for each property and track likes in real-time.
+When a buyer clicks "I'm Interested", send seller details to the buyer via email and send buyer details to the seller via email.
+Email Integration with Nodemailer
+
+bash
+Copy code
+
+
+npm install nodemailer
+Update server.js
+
+js
+Copy code
+
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'your-email@gmail.com',
+    pass: 'your-email-password',
+  },
+});
+
+app.post('/interested/:id', async (req, res) => {
+  const { token } = req.body;
+  const decoded = jwt.verify(token, 'secretkey');
+  const property = await Property.findById(req.params.id).populate('owner');
+  if (property) {
+    property.interestedBuyers.push(decoded.id);
+    await property.save();
+
+    const buyer = await User.findById(decoded.id);
+    const seller = property.owner;
+
+    const mailOptionsBuyer = {
+      from: 'your-email@gmail.com',
+      to: buyer.email,
+      subject: 'Interested in Property',
+      text: `Seller details:\nName: ${seller.firstName} ${seller.lastName}\nEmail: ${seller.email}\nPhone: ${seller.phoneNumber}`,
+    };
+
+    const mailOptionsSeller = {
+      from: 'your-email@gmail.com',
+      to: seller.email,
+      subject: 'Buyer Interested in Your Property',
+      text: `Buyer details:\nName: ${buyer.firstName} ${buyer.lastName}\nEmail: ${buyer.email}\nPhone: ${buyer.phoneNumber}`,
+    };
+
+    transporter.sendMail(mailOptionsBuyer);
+    transporter.sendMail(mailOptionsSeller);
+
+    res.send('Interest registered and emails sent');
+  } else {
+    res.status(404).send('Property not found');
+  }
+});
