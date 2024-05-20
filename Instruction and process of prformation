@@ -1,0 +1,226 @@
+https://github.com/users/Harsh272383/projects/7
+
+
+
+Project: Rentify - Where Renting Meets Simplicity
+Challenge Overview
+The Rentify project is divided into three parts: Basic Application (Mandatory), Add-On Features (Advanced), and Extra (Optional). The goal is to create a web application to connect property owners with potential tenants.
+
+Tech Stack
+For this project, we'll use the following technologies:
+
+Frontend: React
+Backend: Node.js with Express
+Database: MongoDB
+Authentication: JWT (JSON Web Token)
+Deployment (Optional): Heroku
+Part I: Basic Application (Mandatory)
+User Stories
+User Registration
+
+Users can register as either a seller or a buyer by providing their first name, last name, email, and phone number.
+Seller Flow
+
+Sellers can post properties with essential attributes like place, area, number of bedrooms, bathrooms, nearby hospitals, colleges, etc.
+Sellers can view, update, and delete their posted properties.
+Buyer Flow
+
+Buyers can view all posted rental properties.
+Buyers can express interest in properties by clicking an "I'm Interested" button.
+Upon expressing interest, buyers can see the seller's details.
+Buyers can apply filters based on property attributes.
+Backend (Node.js/Express)
+1. Initialize the Project
+
+bash
+Copy code
+mkdir rentify
+cd rentify
+npm init -y
+npm install express mongoose bcryptjs jsonwebtoken cors body-parser
+2. Setup Express Server
+Create server.js
+
+js
+Copy code
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+
+mongoose.connect('mongodb://localhost:27017/rentify', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+const UserSchema = new mongoose.Schema({
+  firstName: String,
+  lastName: String,
+  email: String,
+  phoneNumber: String,
+  password: String,
+  userType: String, // 'buyer' or 'seller'
+});
+
+const PropertySchema = new mongoose.Schema({
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  place: String,
+  area: Number,
+  bedrooms: Number,
+  bathrooms: Number,
+  nearbyHospitals: String,
+  nearbyColleges: String,
+  interestedBuyers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+});
+
+const User = mongoose.model('User', UserSchema);
+const Property = mongoose.model('Property', PropertySchema);
+
+app.post('/register', async (req, res) => {
+  const { firstName, lastName, email, phoneNumber, password, userType } = req.body;
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = new User({ firstName, lastName, email, phoneNumber, password: hashedPassword, userType });
+  await user.save();
+  res.status(201).send('User registered');
+});
+
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (user && await bcrypt.compare(password, user.password)) {
+    const token = jwt.sign({ id: user._id, userType: user.userType }, 'secretkey');
+    res.json({ token });
+  } else {
+    res.status(401).send('Invalid credentials');
+  }
+});
+
+app.post('/property', async (req, res) => {
+  const { token, propertyDetails } = req.body;
+  const decoded = jwt.verify(token, 'secretkey');
+  const property = new Property({ owner: decoded.id, ...propertyDetails });
+  await property.save();
+  res.status(201).send('Property posted');
+});
+
+app.get('/properties', async (req, res) => {
+  const properties = await Property.find().populate('owner', 'firstName lastName email phoneNumber');
+  res.json(properties);
+});
+
+app.put('/property/:id', async (req, res) => {
+  const { token, propertyDetails } = req.body;
+  const decoded = jwt.verify(token, 'secretkey');
+  const property = await Property.findOne({ _id: req.params.id, owner: decoded.id });
+  if (property) {
+    Object.assign(property, propertyDetails);
+    await property.save();
+    res.send('Property updated');
+  } else {
+    res.status(403).send('Unauthorized');
+  }
+});
+
+app.delete('/property/:id', async (req, res) => {
+  const { token } = req.body;
+  const decoded = jwt.verify(token, 'secretkey');
+  const property = await Property.findOne({ _id: req.params.id, owner: decoded.id });
+  if (property) {
+    await property.remove();
+    res.send('Property deleted');
+  } else {
+    res.status(403).send('Unauthorized');
+  }
+});
+
+app.listen(5000, () => {
+  console.log('Server is running on port 5000');
+});
+Part II: Add-On Features (Advanced)
+Pagination and Form Validation
+
+Add pagination for the property listings.
+Implement form validation on both client and server sides.
+Mandatory Login for Buyers
+
+Require buyers to log in to view seller details.
+Redirect unauthorized users attempting to access seller information to the login screen.
+Like Button and Email Notifications
+
+Implement a "Like" button for each property and track likes in real-time.
+When a buyer clicks "I'm Interested", send seller details to the buyer via email and send buyer details to the seller via email.
+Email Integration with Nodemailer
+
+bash
+Copy code
+npm install nodemailer
+Update server.js
+
+js
+Copy code
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'your-email@gmail.com',
+    pass: 'your-email-password',
+  },
+});
+
+app.post('/interested/:id', async (req, res) => {
+  const { token } = req.body;
+  const decoded = jwt.verify(token, 'secretkey');
+  const property = await Property.findById(req.params.id).populate('owner');
+  if (property) {
+    property.interestedBuyers.push(decoded.id);
+    await property.save();
+
+    const buyer = await User.findById(decoded.id);
+    const seller = property.owner;
+
+    const mailOptionsBuyer = {
+      from: 'your-email@gmail.com',
+      to: buyer.email,
+      subject: 'Interested in Property',
+      text: `Seller details:\nName: ${seller.firstName} ${seller.lastName}\nEmail: ${seller.email}\nPhone: ${seller.phoneNumber}`,
+    };
+
+    const mailOptionsSeller = {
+      from: 'your-email@gmail.com',
+      to: seller.email,
+      subject: 'Buyer Interested in Your Property',
+      text: `Buyer details:\nName: ${buyer.firstName} ${buyer.lastName}\nEmail: ${buyer.email}\nPhone: ${buyer.phoneNumber}`,
+    };
+
+    transporter.sendMail(mailOptionsBuyer);
+    transporter.sendMail(mailOptionsSeller);
+
+    res.send('Interest registered and emails sent');
+  } else {
+    res.status(404).send('Property not found');
+  }
+});
+Part III: Bonus Points (Optional)
+Deployment on Heroku
+
+Create a Procfile with the following content:
+makefile
+Copy code
+web: node server.js
+Push the project to a GitHub repository.
+Deploy the application to Heroku using the following commands:
+bash
+Copy code
+heroku create
+git push heroku master
+Using AWS Elastic Beanstalk
+
+Install the EB CLI and initialize the Elastic Beanstalk environment.
+Deploy the application using eb create and eb deploy.
+Conclusion
+The Rentify project aims to streamline the rental property market by connecting property owners with potential tenants through a decentralized web application. By leveraging modern web technologies and cloud deployment strategies, Rentify ensures a secure, scalable, and user-friendly experience for both sellers and buyers.
