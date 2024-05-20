@@ -1,0 +1,23 @@
+
+Deployment on Heroku
+
+Create a Procfile with the following content:
+makefile
+Copy code
+
+
+web: node server.js
+
+
+
+Push the project to a GitHub repository.
+Deploy the application to Heroku using the following commands:
+bash
+
+
+heroku create
+git push heroku master
+Using AWS Elastic Beanstalk
+
+Install the EB CLI and initialize the Elastic Beanstalk environment.
+Deploy the application using eb create and eb deploy.
